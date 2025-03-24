@@ -27,5 +27,6 @@ del house_data_cleaned['lg']
 del house_data_cleaned['DEN']
 del house_data_cleaned['exposure']
 del house_data_cleaned['D_mkt']
+del house_data_cleaned['ward']
 
 print(house_data_cleaned.head())
