@@ -5,7 +5,7 @@ from dataclasses import dataclass
 @dataclass
 class House:
     """House data class"""
-    ward: str
+    id: int
     beds: int
     baths: int
     DEN: bool
@@ -16,11 +16,11 @@ class House:
     price: int
     location: tuple[int, int]
 
-    def __init__(self, ward: str, beds: int, baths: int, size: tuple[int, int], building_age: int,
+    def __init__(self, id: int, beds: int, baths: int, size: tuple[int, int], building_age: int,
                  maint: int, price: int, location: tuple[int, int], den=False, parking=False,) -> None:
         """Initialize a new house.
         """
-        self.ward = ward
+        self.int = int
         self.beds = beds
         self.baths = baths
         self.DEN = den
@@ -30,3 +30,4 @@ class House:
         self.building_age = building_age
         self.price = price
         self.location = location
+
