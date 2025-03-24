@@ -20,7 +20,7 @@ class House:
                  maint: int, price: int, location: tuple[int, int], den=False, parking=False,) -> None:
         """Initialize a new house.
         """
-        self.int = id
+        self.id = id
         self.beds = beds
         self.baths = baths
         self.DEN = den
