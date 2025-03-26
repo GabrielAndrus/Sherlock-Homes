@@ -4,6 +4,13 @@ the model extracts information and assigns it to a dictionary containing importa
 This feature has been hard-coded to ensure fine-tuning; instead of using some sort of API or ChatGPT wrapper,
 we wanted the model to be limited only to relevant information about housing, as per our project.
 
+Using this chatbot requires that the user downloads spacy locally:
+Find the tutorial here: https://spacy.io/
+For mac users, simply type the following into terminal:
+pip install spacy
+python -m spacy download en_core_web_sm
+OR import spacy via python settings.
+
 Implemented by: Gabriel Andrus, 3/25/25.
 """
 
