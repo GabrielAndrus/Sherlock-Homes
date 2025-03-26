@@ -11,6 +11,14 @@ pip install spacy
 python -m spacy download en_core_web_sm
 OR import spacy via python settings.
 
+
+Using this chatbot requires that the user downloads spacy locally:
+Find the tutorial here: https://spacy.io/
+For mac users, simply type the following into terminal:
+pip install spacy
+python -m spacy download en_core_web_sm
+OR import spacy via python settings.
+
 Implemented by: Gabriel Andrus, 3/25/25.
 """
 
@@ -51,27 +59,11 @@ def extract_entities(user_input):
 
     user_entities = doc.ents
 
-    valid_wards = []
-    for ent in user_entities:
-        if ent.label_ == 'WARD' and ent.text.upper().startswith('W') and ent.text[1:].isdigit():
-            valid_wards.append(ent.text)
-    extracted['ward'] = valid_wards[0]  # First ward mention
+    extract_wards(user_entities)  # Extract ward information
 
-    # Get bedroom matches
-    valid_beds = []
-    bed_entries = {'bedrooms', 'bed', 'room', 'br,' 'beds'}
-    for ent in user_entities:
-        if ent.label in bed_entries:
-            valid_beds.append(ent.text)
-    if valid_beds:
-        extracted['bedrooms'] = valid_beds[0]  # First instance of bed terminology
+    extract_bedrooms(user_entities)  # Extract bed information
 
-    valid_bathrooms = []
-    bed_entries = {'bathrooms', 'bath', 'room', 'br,' 'baths'}
-    for ent in user_entities:
-        if ent.label in bed_entries:
-            valid_bathrooms.append(ent.text)
-    extracted['bathrooms'] = valid_bathrooms[0]
+    extract_baths(user_entities)
 
     extract_size(user_entities)  # Extract size
 
@@ -84,6 +76,36 @@ def extract_entities(user_input):
     coordinates = extract_location(user_input)  # Extract location
     extracted['Lt'] = coordinates[0]
     extracted['Lg'] = coordinates[1]
+
+
+def extract_wards(user_entities):
+    """Extract information about housing locations."""
+    valid_wards = []
+    for ent in user_entities:
+        if ent.label_ == 'WARD' and ent.text.upper().startswith('W') and ent.text[1:].isdigit():
+            valid_wards.append(ent.text)
+    extracted['ward'] = valid_wards[0]  # First ward mention
+
+
+def extract_bedrooms(user_entities):
+    """Extract information about housing bedrooms."""
+    valid_beds = []
+    bed_entries = {'bedrooms', 'bed', 'room', 'br,' 'beds'}
+    for ent in user_entities:
+        if ent.label in bed_entries:
+            valid_beds.append(ent.text)
+    if valid_beds:
+        extracted['bedrooms'] = valid_beds[0]  # First instance of bed terminology
+
+
+def extract_baths(user_entities):
+    """Extract information about housing baths."""
+    valid_bathrooms = []
+    bed_entries = {'bathrooms', 'bath', 'room', 'br,' 'baths'}
+    for ent in user_entities:
+        if ent.label in bed_entries:
+            valid_bathrooms.append(ent.text)
+    extracted['bathrooms'] = valid_bathrooms[0]
 
 
 def extract_size(user_entities, min_size=0, max_size=2000):
