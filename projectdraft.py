@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 from geopy.distance import geodesic
 import pandas as pd
-import networkx as nx
-from networkx.classes import neighbors
-from plotly.graph_objs import Scatter, Figure
+import folium
+import webbrowser
 import numpy as np
 
 
@@ -79,8 +78,8 @@ class House:
 
         # Calculates location similarity
         location_dist = geodesic(self.location, h2.location).km
-        MAX_TORONTO_DISTANCE = 40  # Approximate max distance in km
-        location_score = 1 - (location_dist / MAX_TORONTO_DISTANCE)
+        alpha = 0.1  # Adjust scaling
+        location_score = np.exp(-alpha * location_dist)
 
         # Calculates maintenance cost similarity
         maint_diff = abs(self.maint - h2.maint)
@@ -108,13 +107,28 @@ class _Vertex:
     """
     item: int
     house_data: House
-    neighbours: dict[_Vertex, float]
+    neighbours: dict[int, float]
 
     def __init__(self, item: int, house: House, neighbours: {}) -> None:
         """Initialize a new vertex with the given item and neighbours."""
         self.item = item
         self.house_data = house
         self.neighbours = neighbours
+
+    def return_neighbors(self) -> set[tuple[int, int]]:
+        """Returns the pairs of neighbours of this vertex."""
+
+        pairs = set()
+        neighbors = list(self.neighbours.keys())
+
+        # Connect to the vertex itself (if you want to include self as "pair")
+        # pairs.add((min(self.item, self.item), max(self.item, self.item)))  # (a,a)
+
+        # Create all neighbor pairs
+        for neighbor in neighbors:
+            pairs.add((min(self.item, neighbor), max(self.item, neighbor)))
+
+        return pairs
 
 
 class Graph:
@@ -159,8 +173,8 @@ class Graph:
             v2 = self._vertices[item2]
 
             # Add the new edge
-            v1.neighbours[v2] = weight
-            v2.neighbours[v1] = weight
+            v1.neighbours[v2.item] = weight
+            v2.neighbours[v1.item] = weight
         else:
             # We didn't find an existing vertex for both items.
             raise ValueError
@@ -170,30 +184,32 @@ class Graph:
 
         return list(self._vertices.values())
 
-    def to_networkx(self, max_vertices: int = 5000) -> nx.Graph:
-        """Convert this graph into a networkx Graph.
+    def return_adjacent_pairs(self) -> set[tuple[int, int]]:
+        """Returns all adjacent pairs in this graph"""
+        things = set()
 
-        max_vertices specifies the maximum number of vertices that can appear in the graph.
-        (This is necessary to limit the visualization output for large graphs.)
+        for vertex in self._vertices:
+            things = things.union(self._vertices[vertex].return_neighbors())
 
-        Note that this method is provided for you, and you shouldn't change it.
+        return things
+
+    def get_vertex(self, item: int) -> _Vertex:
+        """Return the vertex associated with the given item.
+
+        Raise a KeyError if the item does not exist in the graph.
         """
-        graph_nx = nx.Graph()
+        if item in self._vertices:
+            return self._vertices[item]
+        else:
+            raise KeyError(f"Vertex with item {item} not found in graph.")
 
-        for v in self._vertices.values():
-            graph_nx.add_node(v.item, kind=getattr(v, 'kind', 'normal'))  # Default to 'normal'
+    def get_all_vertices(self) -> list[_Vertex]:
+        """Return a list of all vertices in the graph."""
+        return list(self._vertices.values())
 
-            for u in v.neighbours:
-                if graph_nx.number_of_nodes() < max_vertices:
-                    graph_nx.add_node(u.item, kind=getattr(u, 'kind', 'normal'))
-
-                if u.item in graph_nx.nodes:
-                    graph_nx.add_edge(v.item, u.item)
-
-            if graph_nx.number_of_nodes() >= max_vertices:
-                break
-
-        return graph_nx
+    def get_all_ids(self) -> list[int]:
+        """Return a list of all vertices in the graph."""
+        return list(self._vertices.keys())
 
 
 def load_houses(houses: pd.DataFrame) -> Graph:
@@ -209,23 +225,10 @@ def load_houses(houses: pd.DataFrame) -> Graph:
     for house1 in house_list:
         for house2 in house_list:
             weight = house1.generate_edge_weight(house2)
-            if house1.id != house2.id and weight > 0.7:
+            if house1.id != house2.id and weight > 0.69:
                 houses_graph.add_edge(weight, house1.id, house2.id)
 
     return houses_graph
-
-# Colours to use when visualizing different clusters.
-COLOUR_SCHEME = [
-    '#2E91E5', '#E15F99', '#1CA71C', '#FB0D0D', '#DA16FF', '#222A2A', '#B68100',
-    '#750D86', '#EB663B', '#511CFB', '#00A08B', '#FB00D1', '#FC0080', '#B2828D',
-    '#6C7C32', '#778AAE', '#862A16', '#A777F1', '#620042', '#1616A7', '#DA60CA',
-    '#6C4516', '#0D2A63', '#AF0038'
-]
-
-LINE_COLOUR = 'rgb(210,210,210)'
-VERTEX_BORDER_COLOUR = 'rgb(50, 50, 50)'
-HOUSE_COLOUR = 'rgb(89, 205, 105)'  # Green for all nodes
-USER_COLOUR = 'rgb(105, 89, 205)'
 
 
 def knn_model(user_house: House, house_graph: Graph) -> _Vertex:
@@ -234,31 +237,55 @@ def knn_model(user_house: House, house_graph: Graph) -> _Vertex:
 
     for vertex in house_graph.list_vertices():
         weight = vertex.house_data.generate_edge_weight(user_house)
-        if weight > .75:
-            user_house_vertex.neighbours[vertex] = weight
+        if weight > .69:
+            user_house_vertex.neighbours[vertex.item] = weight
 
     return user_house_vertex
 
 
-def load_user_graph(user_vertex: _Vertex) -> Graph:
+def load_user_graph(user_vertex: _Vertex, house_graph: Graph) -> Graph:
     """loads graph of houses nearest to users requests"""
     graph = Graph()
+
+    # Add user vertex first
     graph.add_vertex(user_vertex.house_data, user_vertex.item)
 
-    # Add all nearest neighbors
-    for neighbor, weight in user_vertex.neighbours.items():
-        graph.add_vertex(neighbor.house_data, neighbor.item)
+    # First pass: add all vertices (user + neighbors)
+    for neighbor, _ in user_vertex.neighbours.items():
+        neighbor_vertex = house_graph.get_vertex(neighbor)
+        graph.add_vertex(neighbor_vertex.house_data, neighbor)
 
-    # Connect only the user vertex to its nearest neighbors
+    # Second pass: connect user to neighbors
     for neighbor, weight in user_vertex.neighbours.items():
-        graph.add_edge(weight, user_vertex.item, neighbor.item)
+        graph.add_edge(weight, user_vertex.item, neighbor)
 
-        # Also connect neighbors to each other if they were originally connected
-        for second_neighbor, second_weight in neighbor.neighbours.items():
+        # Connect neighbors to each other if they were originally connected
+        neighbor_vertex = house_graph.get_vertex(neighbor)
+        for second_neighbor, second_weight in neighbor_vertex.neighbours.items():
             if second_neighbor in user_vertex.neighbours:
-                graph.add_edge(second_weight, neighbor.item, second_neighbor.item)
+                try:
+                    graph.add_edge(second_weight, neighbor, second_neighbor)
+                except ValueError:
+                    # Skip if edge already exists or vertices missing
+                    continue
 
     return graph
+
+
+def find_average_price(user_graph: Graph) -> float:
+    """Returns the average house price"""
+    houses = user_graph.get_all_vertices()
+    prices_so_far = 0
+    
+    if houses == 1:
+        print("No houses found matching user input")
+        return 0
+    
+    for house in houses:
+        if house.item != 1:
+            prices_so_far += house.house_data.price
+            
+    return prices_so_far/(len(houses)-1)
 
 
 def lat_lng_map(houses: pd.DataFrame) -> dict[int: tuple[float, float]]:
@@ -266,103 +293,74 @@ def lat_lng_map(houses: pd.DataFrame) -> dict[int: tuple[float, float]]:
     return {row['h_id']: row['location'] for _, row in houses.iterrows()}
 
 
-def visualize_graph(graph: Graph,
-                    lat_long_map: dict[str, tuple[float, float]],
-                    user_vertex: int = 1,  # Add user_vertex as a parameter
-                    max_vertices: int = 5000,
-                    output_file: str = '') -> None:
-    """Visualize the given graph using lat-long coordinates for node placement.
+def load_map(location_map: dict[int: tuple[float, float]], houses_graph: Graph):
+    """loads map"""
 
-    - lat_long_map: Dictionary mapping vertex names to (latitude, longitude).
-    - user_vertex: The vertex representing the user's house (highlighted).
-    - max_vertices: The maximum number of vertices to visualize.
-    - output_file: Filename to save the output image (optional).
-    """
-    graph_nx = graph.to_networkx(max_vertices)
+    my_map1 = folium.Map(location=[43.66579167224076, -79.38951447651665],
+                         zoom_start=12)
 
-    # Extract node positions and labels
-    x_values = []
-    y_values = []
-    labels = []
-    colors = []  # To store colors for nodes
+    for _id in location_map:
+        loc = location_map[_id]
 
-    for node in graph_nx.nodes:
-        if node in lat_long_map:
-            lat, lon = lat_long_map[node]
-            x_values.append(lon)  # Longitude as x-axis
-            y_values.append(lat)  # Latitude as y-axis
-            labels.append(node)
+        folium.Marker([loc[0], loc[1]],
+                      popup=loc, icon=folium.Icon(color="blue", icon="home", prefix="fa")).add_to(my_map1)
 
-            # Set color: red for user vertex, blue for others
-            if node == user_vertex:
-                colors.append("red")  # User vertex is red
-            else:
-                colors.append("blue")  # All others are blue
+    all_pairs = houses_graph.return_adjacent_pairs()
 
-    # Prepare edge data
-    x_edges = []
-    y_edges = []
-    for edge in graph_nx.edges:
-        if edge[0] in lat_long_map and edge[1] in lat_long_map:
-            x0, y0 = lat_long_map[edge[0]][1], lat_long_map[edge[0]][0]  # (lon, lat)
-            x1, y1 = lat_long_map[edge[1]][1], lat_long_map[edge[1]][0]  # (lon, lat)
+    for pair in all_pairs:
+        folium.PolyLine(locations=[location_map[pair[0]], location_map[pair[1]]], weight=1,
+                        color="#2E8B57", line_opacity=0.15).add_to(my_map1)
 
-            x_edges += [x0, x1, None]  # None creates line breaks
-            y_edges += [y0, y1, None]
+    my_map1.save("my_map1.html")
+    webbrowser.open("my_map1.html")
 
-    # Edge trace
-    trace_edges = Scatter(
-        x=x_edges,
-        y=y_edges,
-        mode='lines',
-        line=dict(color='lightblue', width=0.5),
-        hoverinfo='none',
-    )
 
-    # Node trace
-    trace_nodes = Scatter(
-        x=x_values,
-        y=y_values,
-        mode='markers',
-        marker=dict(
-            size=5,
-            color=colors,  # Apply the color array
-            line=dict(color='black', width=1)
-        ),
-        text=labels,
-        hovertemplate='%{text}',
-    )
+def load_recommended_map(location_map: dict[int: tuple[float, float]], houses_graph: Graph):
+    """loads map"""
 
-    # Create figure
-    fig = Figure(data=[trace_edges, trace_nodes])
+    my_map2 = folium.Map(location=[43.66579167224076, -79.38951447651665],
+                         zoom_start=12)
 
-    # Set layout
-    fig.update_layout(
-        title="Graph Visualization with Lat-Long",
-        xaxis_title="Longitude",
-        yaxis_title="Latitude",
-        width=1000,
-        height=800,
-        showlegend=False,
-        xaxis=dict(showgrid=True, gridwidth=0.5, gridcolor="lightgrey"),  # Faint grid
-        yaxis=dict(showgrid=True, gridwidth=0.5, gridcolor="lightgrey")   # Faint grid
-    )
+    vertices = houses_graph.get_all_vertices()
 
-    # Display or save
-    if output_file == '':
-        fig.show()
-    else:
-        fig.write_image(output_file)
+    user_loc = location_map[1]
+
+    folium.Marker(
+        location=[user_loc[0], user_loc[1]],
+        popup="User",
+        icon=folium.Icon(color="red", icon="home", prefix="fa")  # Change "home" to other icons if needed
+    ).add_to(my_map2)
+
+    for vertex in vertices:
+        if vertex.house_data.id != 1:
+            loc = vertex.house_data.location
+
+            folium.Marker([loc[0], loc[1]], popup=f"${vertex.house_data.price}",
+                          icon=folium.Icon(color="blue", icon="home", prefix="fa")).add_to(my_map2)
+
+    all_pairs = houses_graph.return_adjacent_pairs()
+
+    # iterate through vertices to plot all markers with price and id
+
+    for pair in all_pairs:
+
+        folium.PolyLine(locations=[location_map[pair[0]], location_map[pair[1]]], weight=1,
+                        color="#2E8B57", line_opacity=0.15).add_to(my_map2)
+
+    my_map2.save("my_map2.html")
+    webbrowser.open("my_map2.html")
 
 
 house_data = clean_houses_data("real-estate-data.csv")
 loc_map = lat_lng_map(house_data)
 house_graph = load_houses(house_data)
-user_house = House(1, 2, 2, (500,999), 1, 767, 838000,
-                   (43.6204466596335, -79.37543575581886), True, True)
-user_vertex = knn_model(user_house, house_graph)
-user_graph = load_user_graph(user_vertex)
 
-# visualize_graph(house_graph, loc_map)
+user_house = House(1, 2, 2, (500, 999), 1, 767, 838000,
+                   (43.634466596335, -79.42543575581886), True, True)
+user_vertex = knn_model(user_house, house_graph)
+user_graph = load_user_graph(user_vertex, house_graph)
+
 loc_map[1] = user_house.location
-visualize_graph(user_graph, loc_map)
+load_map(loc_map, house_graph)
+load_recommended_map(loc_map, user_graph)
+
