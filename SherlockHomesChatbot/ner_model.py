@@ -34,6 +34,28 @@ matcher.add("PARKING", [[{"LOWER": "parking"}]])
 matcher.add("PARKING", [[{"LOWER": "no"}, {"LOWER": "parking"}]])
 matcher.add("PRICE", [[{"TEXT": "$"}, {"IS_DIGIT": True}]])
 matcher.add("PRICE", [[{"LOWER": "price"}, {"IS_DIGIT": True}]])
+matcher.add("BUILDING AGE", [[{"LOWER": "age"}, {"IS_DIGIT": True}]])
+matcher.add("BUILDING AGE", [[{"LOWER": "years old"}, {"IS_DIGIT": True}]])
+matcher.add("LOCATION", [[{"IS_DIGIT": True}, {"LOWER": "city"}]])
+matcher.add("LOCATION", [[{"IS_DIGIT": True}, {"LOWER": "state"}]])
+matcher.add("LATITUDE", [
+    [{"LOWER": {"IN": ["latitude", "lat"]}}, {"IS_PUNCT": True, "OP": "?"}, {"LIKE_NUM": True}],
+    [{"TEXT": {"REGEX": r"^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?)(°| degrees)?[ ]?[NSns]?$"}}]
+])
+
+matcher.add("LONGITUDE", [
+    [{"LOWER": {"IN": ["longitude", "long", "lon"]}}, {"IS_PUNCT": True, "OP": "?"}, {"LIKE_NUM": True}],
+    [{"TEXT": {"REGEX": r"^[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)(°| degrees)?[ ]?[EWew]?$"}}]
+])
+
+matcher.add("COORDINATES", [
+    [{"TEXT": {"REGEX": r"^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?)$"}},
+     {"IS_PUNCT": True},
+     {"TEXT": {"REGEX": r"^[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$"}}],
+    [{"TEXT": {"REGEX": r"^(\d{1,3}\.\d+)°?[ ]?[NSns]?$"}},
+     {"IS_PUNCT": True},
+     {"TEXT": {"REGEX": r"^(\d{1,3}\.\d+)°?[ ]?[EWew]?$"}}]
+])
 
 def extract_housing_info(user_input):
     """Extract housing information from user input."""
@@ -46,7 +68,13 @@ def extract_housing_info(user_input):
         'bathrooms': None,
         'size': None,
         'parking': None,
-        'price': None
+        'building_age': None,
+        'price': None,
+        'location': None,
+        'latitude': None,
+        'longitude': None,
+        'coordinates': None,
+
     }
 
     for match_id, start, end in matches:
@@ -79,9 +107,44 @@ def extract_housing_info(user_input):
             else:
                 results['parking'] = True
 
+        elif label == "BUILDING AGE":
+            num = next(t.text for t in span if t.is_digit)
+            if num:
+                results['building_age'] = f"Building age {num}"
+
         elif label == "PRICE":
             num = next((t.text for t in span if t.is_digit), None)
             if num:
                 results['price'] = num
+
+        elif label == "LOCATION":
+            num = next((t.text for t in span if t.is_digit), None)
+            if num:
+                results['location'] = num
+
+        elif label == "LATITUDE":
+            num = next((t.text for t in span if t.like_num), None)
+            if num:
+                results['latitude'] = num
+
+        elif label == "LONGITUDE":
+            num = next((t.text for t in span if t.like_num), None)
+            if num:
+                results['longitude'] = num
+
+        elif label == "COORDINATES":
+            nums = [t.text for t in span if t.like_num]
+            if len(nums) == 2:
+                results['coordinates'] = f"{nums[0]},{nums[1]}"
+
+        if results['longitude'] and results['latitude'] and not results['coordinates']:
+            results['coordinates'] = f"{results['longitude']},{results['latitude']}"
+
+        # In case no location is specified (so code doesn't break)
+        if not results['location']:
+            for ent in doc.ents:
+                if ent.label_ in ("GPE", "LOC", "FAC"):
+                    results['Location'] = ent.text
+                    break
 
     return results
