@@ -65,6 +65,7 @@ class House:
 
     def generate_edge_weight(self, h2: House) -> float:
         """Generates a value based on the similarity of two houses."""
+        """Generates a value based on the similarity of two houses."""
 
         # Feature similarity (beds, baths, sqft)
         features1 = [self.beds, self.baths, self.size[0], self.size[1]]
@@ -94,11 +95,13 @@ class House:
         return total_weight
 
 
+
 class _Vertex:
     """A vertex in a graph.
 
     Instance Attributes:
-        - item: The data stored in this vertex.
+        - item: The identifying datum stored for this vertex.
+        - house_data: The house data of this vertex.
         - neighbours: The vertices that are adjacent to this vertex.
 
     Representation Invariants:
@@ -180,12 +183,12 @@ class Graph:
             raise ValueError
 
     def list_vertices(self) -> list[_Vertex]:
-        """Returns a list of all vertices in the graph"""
+        """Returns a list of all vertices in the graph."""
 
         return list(self._vertices.values())
 
     def return_adjacent_pairs(self) -> set[tuple[int, int]]:
-        """Returns all adjacent pairs in this graph"""
+        """Returns all adjacent pairs in this graph."""
         things = set()
 
         for vertex in self._vertices:
@@ -211,9 +214,13 @@ class Graph:
         """Return a list of all vertices in the graph."""
         return list(self._vertices.keys())
 
+    def validrecs(self) -> bool:
+        """Returns whether the graph is a valid recommendation graph."""
+        return len(self._vertices) <= 1
+
 
 def load_houses(houses: pd.DataFrame) -> Graph:
-    """Load graph"""
+    """Returns a graph of all the houses present in the DataFrame."""
 
     houses_graph = Graph()
 
@@ -232,7 +239,8 @@ def load_houses(houses: pd.DataFrame) -> Graph:
 
 
 def knn_model(users_house: House, houses_graph: Graph) -> _Vertex:
-    """Turns user_input into a node and finds its nearest neighbours from the graph"""
+    """Turns user_input, an instance of the house class, into a node
+     and finds its nearest neighbours from the graph."""
     user_house_vertex = _Vertex(users_house.id, users_house, {})
 
     for vertex in houses_graph.list_vertices():
@@ -244,7 +252,7 @@ def knn_model(users_house: House, houses_graph: Graph) -> _Vertex:
 
 
 def load_user_graph(users_vertex: _Vertex, houses_graph: Graph) -> Graph:
-    """loads graph of houses nearest to users requests"""
+    """Returns a graph of houses similar enough to to the user's input house listing."""
     graph = Graph()
 
     # Add user vertex first
@@ -273,7 +281,8 @@ def load_user_graph(users_vertex: _Vertex, houses_graph: Graph) -> Graph:
 
 
 def find_average_price(users_graph: Graph) -> float:
-    """Returns the average house price"""
+    """Returns the average house price based on the graph of listings similar to the user's
+    input listing."""
     houses = users_graph.get_all_vertices()
     prices_so_far = 0
 
@@ -289,12 +298,12 @@ def find_average_price(users_graph: Graph) -> float:
 
 
 def lat_lng_map(houses: pd.DataFrame) -> dict[int: tuple[float, float]]:
-    """generates a mapping of house to location"""
+    """Generates a mapping of house to location."""
     return {row['h_id']: row['location'] for _, row in houses.iterrows()}
 
 
 def load_map(location_map: dict[int: tuple[float, float]], houses_graph: Graph):
-    """loads map"""
+    """Loads the map."""
 
     my_map1 = folium.Map(location=[43.66579167224076, -79.38951447651665],
                          zoom_start=12)
@@ -305,18 +314,18 @@ def load_map(location_map: dict[int: tuple[float, float]], houses_graph: Graph):
         folium.Marker([loc[0], loc[1]],
                       popup=loc, icon=folium.Icon(color="blue", icon="home", prefix="fa")).add_to(my_map1)
 
-    '''all_pairs = houses_graph.return_adjacent_pairs()
+    all_pairs = houses_graph.return_adjacent_pairs()
 
     for pair in all_pairs:
         folium.PolyLine(locations=[location_map[pair[0]], location_map[pair[1]]], weight=1,
-                        color="#2E8B57", line_opacity=0.15).add_to(my_map1)'''
+                        color="#2E8B57", line_opacity=0.15).add_to(my_map1)
 
     my_map1.save("my_map1.html")
     webbrowser.open("my_map1.html")
 
 
 def load_recommended_map(location_map: dict[int: tuple[float, float]], houses_graph: Graph):
-    """loads map"""
+    """Loads a map of recommendtions."""
 
     my_map2 = folium.Map(location=[43.66579167224076, -79.38951447651665],
                          zoom_start=12)
@@ -359,21 +368,58 @@ def load_recommended_map(location_map: dict[int: tuple[float, float]], houses_gr
     my_map2.save("my_map2.html")
     webbrowser.open("my_map2.html")
 
+def maketuple(kind: str, input: str) -> tuple[Any, Any]:
+    """Makes a tuple of the specified kind.
 
-house_data = clean_houses_data("real-estate-data.csv")
-loc_map = lat_lng_map(house_data)
-house_graph = load_houses(house_data)
+    >>> item = maketuple('size', '500-999 sqft')
+    >>> item
+    (500, 999)"""
+    if kind == "size":
+        input = input[:-4]
+        input = input.split('-')
+        return input[0], input[1]
+    else:
+        print('Not implemented kind.')
+        return None, None
 
-user_house = House(1, 2, 2, (500, 999), 1, 767, 838000,
-                   (43.634466596335, -79.42543575581886), True, True)
-user_vertex = knn_model(user_house, house_graph)
-user_graph = load_user_graph(user_vertex, house_graph)
 
-loc_map[1] = user_house.location
-load_map(loc_map, house_graph)
-load_recommended_map(loc_map, user_graph)
+ongoing = True
+while ongoing is True:
+    user_input = []
+    user_input.append(int(input('How many beds are there?')))
+    user_input.append(int(input('How many bathrooms are there?')))
+    sizetuple = input('What is the size range? Please provide in the format of NUMBER-NUMBER sqft.')
+    sizetuple = maketuple('size', sizetuple)
+    user_input.append(sizetuple)
+    user_input.append(int(input("What's the building age in years?")))
+    user_input.append(int(input("What's the maintenance score between 200-3500?")))
+    user_input.append(int(input("What's the price?")))
+    lat = float(input('What is the location latitude.'))
+    long = float(input('What is the location longitude.'))
+    loctup = lat, long
+    user_input.append(loctup)
+    user_input.append(input("Is there a den, true or false?"))
+    user_input.append(input("Is there parking, true or false?"))
 
-loc_map[1] = user_house.location
-load_map(loc_map, house_graph)
-load_recommended_map(loc_map, user_graph)
+    house_data = clean_houses_data("real-estate-data.csv")
+    loc_map = lat_lng_map(house_data)
+    house_graph = load_houses(house_data)
+    user_house = House(1, user_input[0], user_input[1], user_input[2], user_input[3], user_input[4],
+                       user_input[5], user_input[6], user_input[7], user_input[8])
 
+    # user_house = House(1, 2, 2, (500, 999), 1, 767, 838000,
+     #                 (43.634466596335, -79.42543575581886), True, True)
+
+    user_vertex = knn_model(user_house, house_graph)
+    user_graph = load_user_graph(user_vertex, house_graph)
+    if user_graph.validrecs() is True:
+        print("No reccomendations found. That's one unique house!")
+        continue
+    else:
+        loc_map[1] = user_house.location
+        load_map(loc_map, house_graph)
+        load_recommended_map(loc_map, user_graph)
+
+        loc_map[1] = user_house.location
+        load_map(loc_map, house_graph)
+        load_recommended_map(loc_map, user_graph)
