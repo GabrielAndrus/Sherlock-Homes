@@ -379,7 +379,7 @@ def maketuple(kind: str, input: str) -> tuple[Any, Any]:
         input = input.split('-')
         return input[0], input[1]
     else:
-        print('Not implemented kind.')
+        print('Not implemented kind of tuple.')
         return None, None
 
 
