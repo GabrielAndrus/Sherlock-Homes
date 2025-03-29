@@ -11,11 +11,11 @@ import numpy as np
 
 def clean_houses_data(file: str) -> pd.DataFrame:
     """Cleans the house data file"""
-    house_data = pd.read_csv(file)
+    houses_data = pd.read_csv(file)
 
-    house_data.replace("N/A", pd.NA, inplace=True)
-    house_data.replace("NA", pd.NA, inplace=True)
-    house_data_cleaned = house_data.dropna()
+    houses_data.replace("N/A", pd.NA, inplace=True)
+    houses_data.replace("NA", pd.NA, inplace=True)
+    house_data_cleaned = houses_data.dropna()
     house_data_cleaned = house_data_cleaned.copy()
 
     house_data_cleaned['DEN'] = house_data_cleaned['DEN'].map({'YES': True, 'no': False})
@@ -231,38 +231,38 @@ def load_houses(houses: pd.DataFrame) -> Graph:
     return houses_graph
 
 
-def knn_model(user_house: House, house_graph: Graph) -> _Vertex:
+def knn_model(users_house: House, houses_graph: Graph) -> _Vertex:
     """Turns user_input into a node and finds its nearest neighbours from the graph"""
-    user_house_vertex = _Vertex(user_house.id, user_house, {})
+    user_house_vertex = _Vertex(users_house.id, users_house, {})
 
-    for vertex in house_graph.list_vertices():
-        weight = vertex.house_data.generate_edge_weight(user_house)
+    for vertex in houses_graph.list_vertices():
+        weight = vertex.house_data.generate_edge_weight(users_house)
         if weight > .69:
             user_house_vertex.neighbours[vertex.item] = weight
 
     return user_house_vertex
 
 
-def load_user_graph(user_vertex: _Vertex, house_graph: Graph) -> Graph:
+def load_user_graph(users_vertex: _Vertex, houses_graph: Graph) -> Graph:
     """loads graph of houses nearest to users requests"""
     graph = Graph()
 
     # Add user vertex first
-    graph.add_vertex(user_vertex.house_data, user_vertex.item)
+    graph.add_vertex(users_vertex.house_data, users_vertex.item)
 
     # First pass: add all vertices (user + neighbors)
-    for neighbor, _ in user_vertex.neighbours.items():
-        neighbor_vertex = house_graph.get_vertex(neighbor)
+    for neighbor, _ in users_vertex.neighbours.items():
+        neighbor_vertex = houses_graph.get_vertex(neighbor)
         graph.add_vertex(neighbor_vertex.house_data, neighbor)
 
     # Second pass: connect user to neighbors
-    for neighbor, weight in user_vertex.neighbours.items():
-        graph.add_edge(weight, user_vertex.item, neighbor)
+    for neighbor, weight in users_vertex.neighbours.items():
+        graph.add_edge(weight, users_vertex.item, neighbor)
 
         # Connect neighbors to each other if they were originally connected
-        neighbor_vertex = house_graph.get_vertex(neighbor)
+        neighbor_vertex = houses_graph.get_vertex(neighbor)
         for second_neighbor, second_weight in neighbor_vertex.neighbours.items():
-            if second_neighbor in user_vertex.neighbours:
+            if second_neighbor in users_vertex.neighbours:
                 try:
                     graph.add_edge(second_weight, neighbor, second_neighbor)
                 except ValueError:
@@ -272,19 +272,19 @@ def load_user_graph(user_vertex: _Vertex, house_graph: Graph) -> Graph:
     return graph
 
 
-def find_average_price(user_graph: Graph) -> float:
+def find_average_price(users_graph: Graph) -> float:
     """Returns the average house price"""
-    houses = user_graph.get_all_vertices()
+    houses = users_graph.get_all_vertices()
     prices_so_far = 0
-    
+
     if houses == 1:
         print("No houses found matching user input")
         return 0
-    
+
     for house in houses:
         if house.item != 1:
             prices_so_far += house.house_data.price
-            
+
     return prices_so_far/(len(houses)-1)
 
 
@@ -305,11 +305,11 @@ def load_map(location_map: dict[int: tuple[float, float]], houses_graph: Graph):
         folium.Marker([loc[0], loc[1]],
                       popup=loc, icon=folium.Icon(color="blue", icon="home", prefix="fa")).add_to(my_map1)
 
-    all_pairs = houses_graph.return_adjacent_pairs()
+    '''all_pairs = houses_graph.return_adjacent_pairs()
 
     for pair in all_pairs:
         folium.PolyLine(locations=[location_map[pair[0]], location_map[pair[1]]], weight=1,
-                        color="#2E8B57", line_opacity=0.15).add_to(my_map1)
+                        color="#2E8B57", line_opacity=0.15).add_to(my_map1)'''
 
     my_map1.save("my_map1.html")
     webbrowser.open("my_map1.html")
@@ -335,7 +335,16 @@ def load_recommended_map(location_map: dict[int: tuple[float, float]], houses_gr
         if vertex.house_data.id != 1:
             loc = vertex.house_data.location
 
-            folium.Marker([loc[0], loc[1]], popup=f"${vertex.house_data.price}",
+            popup_text = f"""
+            Price: ${vertex.house_data.price}<br>
+            Beds: {int(vertex.house_data.beds)}<br>
+            Baths: {vertex.house_data.baths}<br>
+            Size: {vertex.house_data.size}<br>
+            Parking: {vertex.house_data.parking}<br>
+            Location: {vertex.house_data.location}
+            """
+
+            folium.Marker([loc[0], loc[1]], popup=popup_text,
                           icon=folium.Icon(color="blue", icon="home", prefix="fa")).add_to(my_map2)
 
     all_pairs = houses_graph.return_adjacent_pairs()
@@ -359,6 +368,10 @@ user_house = House(1, 2, 2, (500, 999), 1, 767, 838000,
                    (43.634466596335, -79.42543575581886), True, True)
 user_vertex = knn_model(user_house, house_graph)
 user_graph = load_user_graph(user_vertex, house_graph)
+
+loc_map[1] = user_house.location
+load_map(loc_map, house_graph)
+load_recommended_map(loc_map, user_graph)
 
 loc_map[1] = user_house.location
 load_map(loc_map, house_graph)
