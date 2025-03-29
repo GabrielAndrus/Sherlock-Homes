@@ -30,4 +30,3 @@ class House:
         self.building_age = building_age
         self.price = price
         self.location = location
-
