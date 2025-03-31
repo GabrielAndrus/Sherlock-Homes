@@ -20,6 +20,7 @@ import spacy
 from spacy.matcher import Matcher
 import re
 
+
 nlp = spacy.load("en_core_web_sm")
 matcher = Matcher(nlp.vocab)
 
@@ -201,3 +202,15 @@ def extract_housing_info(user_input):
                     break
 
     return results
+
+if __name__ == '__main__':
+    import doctest
+
+    doctest.testmod()
+
+    import python_ta
+
+    python_ta.check_all(config={
+        'max-line-length': 120,
+        'extra_imports': ['spacy', 're']
+    })
