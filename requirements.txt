@@ -1,0 +1,7 @@
+# Sherlock Homes Requirements
+geopy
+pandas
+folium
+webbrowser
+numpy
+spacy (further instructions included in report)
