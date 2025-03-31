@@ -21,8 +21,8 @@ import numpy as np
 import os
 
 import ner_model
-from SherlockChatbot import *
-from SherlockChatbot import user_preferences
+from sherlock_chatbot import *
+from sherlock_chatbot import user_preferences
 
 
 def clean_houses_data(file: str) -> pd.DataFrame:
