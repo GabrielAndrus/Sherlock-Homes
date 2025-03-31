@@ -52,3 +52,15 @@ time.sleep(2)
 print("Generating...")
 time.sleep(3)
 print("Generating...")
+
+if __name__ == '__main__':
+    import doctest
+
+    doctest.testmod()
+
+    import python_ta
+
+    python_ta.check_all(config={
+        'max-line-length': 120,
+        'extra-imports': ['time']
+    })
