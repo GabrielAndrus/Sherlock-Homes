@@ -13,7 +13,7 @@ OR import spacy via python settings.
 
 Citations: DeepSeek AI generated the patterns to add to the matcher (lines 25-36), but the rest of the code is mine.
 
-Implemented by: Gabriel Andrus, 3/25/25.
+Implemented by: Gabriel Andrus, Deepankar Garg. 3/25/25.
 """
 
 import spacy
@@ -68,7 +68,7 @@ matcher.add("COORDINATES", [
 
 
 def extract_housing_info(user_input):
-    """Extract housing information from user input."""
+    """Extracts housing information from user input."""
     doc = nlp(user_input)
     matches = matcher(doc)
 

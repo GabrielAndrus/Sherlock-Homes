@@ -1,4 +1,15 @@
-"""Defining House Daniel please update docstring/description for this"""
+"""This file contains the main code of the Sherlock Homes chatbot. Running this file is sufficient to use this program,
+as long as all prequisite libraries and all other modules are downloaded and accounted for.
+Using this chatbot requires that the user downloads:
+- geopy
+- folium
+- pandas
+- webbrowser
+- numpy
+- os
+
+Implemented by: Gabriel Andrus, Moyosoreoluwa Daniel Okedele, Deepankar Garg, and Zahra Alyssa Buchanan. 3/30/25.
+"""
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
@@ -15,7 +26,7 @@ from SherlockChatbot import user_preferences
 
 
 def clean_houses_data(file: str) -> pd.DataFrame:
-    """Cleans the house data file"""
+    """Clean the house data file and returns the data as a DataFrame."""
     houses_data = pd.read_csv(file)
 
     # Handle NA
@@ -65,7 +76,24 @@ def clean_houses_data(file: str) -> pd.DataFrame:
 
 @dataclass
 class House:
-    """House data class"""
+    """A custom data type that represents data for a house listing.
+
+    Instance Attributes:
+        - id: always 1.
+        - beds: The number of beds of the house listing.
+        - baths: The number of bathrooms of the house listing.
+        - DEN: Whether the house listing includes a den.
+        - size: The size of the house in a range of square feet.
+        - parking: Whether the house listing includes a parking lot.
+        - building_age: The age of the house.
+        - maint: A 'maintenance grade' of the house.
+        - price: The price of the house listing.
+        - location: The location of the house in latitude and longitude.
+
+    Representation Invariants:
+        - id == 1
+        - beds >= 0
+        - baths >= 0"""
     id: 1
     beds: int | None
     baths: int | None
@@ -99,7 +127,7 @@ class House:
         """Generates a value based on the similarity of two houses."""
 
         def safe_compare(a, b, default=0):
-            """Safely compare None/missing values"""
+            """Safely compare None/missing values."""
             if a is None and b is None:
                 return default
 
@@ -156,7 +184,7 @@ class House:
         maint_score = 1 / (1 + (maint_diff / 1000))
 
         age_diff = safe_compare(self.building_age, h2.building_age, default=20)
-        age_score = 1/ (1 + (age_diff / 20))
+        age_score = 1 / (1 + (age_diff / 20))
 
         den_score = 1.0 if (self.DEN == h2.DEN) or (self.DEN is None or h2.DEN is None) else 0.7
         parking_score = 1.0 if (self.parking == h2.parking) or (self.parking is None or h2.parking is None) else 0.7
@@ -178,6 +206,7 @@ class _Vertex:
 
     Instance Attributes:
         - item: The data stored in this vertex.
+        - house_data: The instance of the House class for this vertex.
         - neighbours: The vertices that are adjacent to this vertex.
 
     Representation Invariants:
@@ -259,12 +288,12 @@ class Graph:
             raise ValueError
 
     def list_vertices(self) -> list[_Vertex]:
-        """Returns a list of all vertices in the graph"""
+        """Returns a list of all vertices in the graph."""
 
         return list(self._vertices.values())
 
     def return_adjacent_pairs(self) -> set[tuple[int, int]]:
-        """Returns all adjacent pairs in this graph"""
+        """Returns all adjacent pairs in this graph."""
         things = set()
 
         for vertex in self._vertices:
@@ -292,7 +321,7 @@ class Graph:
 
 
 def load_houses(houses: pd.DataFrame) -> Graph:
-    """Load graph with more inclusive threshold"""
+    """Load graph with all the houses added as vertices."""
     houses_graph = Graph()
     house_list = [House(**row) for row in houses.to_dict(orient="records")]
 
@@ -311,6 +340,7 @@ def load_houses(houses: pd.DataFrame) -> Graph:
 
 
 def knn_model(users_house: House, houses_graph: Graph) -> _Vertex:
+    """Returns the user's input as a house vertex."""
     user_house_vertex = _Vertex(users_house.id, users_house, {})
     similarities = []
 
@@ -329,7 +359,7 @@ def knn_model(users_house: House, houses_graph: Graph) -> _Vertex:
 
 
 def load_user_graph(users_vertex: _Vertex, houses_graph: Graph) -> Graph:
-    """loads graph of houses nearest to users requests"""
+    """loads graph of houses most similar to user input."""
     graph = Graph()
 
     # Add user vertex first
@@ -358,7 +388,7 @@ def load_user_graph(users_vertex: _Vertex, houses_graph: Graph) -> Graph:
 
 
 def find_average_price(users_graph: Graph) -> float:
-    """Returns the average house price"""
+    """Returns the average house price."""
     houses = users_graph.get_all_vertices()
     prices_so_far = 0
 
@@ -374,12 +404,12 @@ def find_average_price(users_graph: Graph) -> float:
 
 
 def lat_lng_map(houses: pd.DataFrame) -> dict[int: tuple[float, float]]:
-    """generates a mapping of house to location"""
+    """Generates a mapping of house to location."""
     return {row['h_id']: row['location'] for _, row in houses.iterrows()}
 
 
 def load_map(location_map: dict[int: tuple[float, float]], houses_graph: Graph):
-    """loads map"""
+    """Loads the map."""
 
     my_map1 = folium.Map(location=[43.66579167224076, -79.38951447651665],
                          zoom_start=12)
@@ -404,7 +434,7 @@ def load_map(location_map: dict[int: tuple[float, float]], houses_graph: Graph):
 
 
 def load_recommended_map(location_map: dict[int, tuple[float, float]], houses_graph: Graph):
-    """Loads map with better debugging"""
+    """Loads map with the user preferences."""
     try:
         # Create map centered on user location
         user_loc = location_map.get(1, (43.66579167224076, -79.38951447651665))
@@ -456,6 +486,7 @@ def load_recommended_map(location_map: dict[int, tuple[float, float]], houses_gr
 
     except Exception as e:
         print(f"Failed to create map: {str(e)}")
+
 
 house_data = clean_houses_data("real-estate-data.csv")
 print('Done cleaning data.')
